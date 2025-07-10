@@ -1,0 +1,12 @@
+{
+  "needs": [
+    "I want to learn a new programming language.",
+    "I’m trying to get into shape but don’t have a plan.",
+    "I need help preparing for a job interview."
+  ],
+  "availabilities": [
+    "There’s a free online Python course by MIT.",
+    "A friend is a fitness coach and offers guidance.",
+    "There’s a mock interview platform that’s free to use."
+  ]
+}
