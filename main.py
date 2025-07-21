@@ -24,13 +24,6 @@ for i, note in enumerate(data):
     nat_raw = nat_filler.fill_nat(note)
     print("NAT:", nat_raw)
     
-    # OPTIONAL: clean output from stringified JSON to dict
-
-
-for i, note in enumerate(data):
-    print(f"\nProcessing Note {i + 1}")
-    nat_raw = nat_filler.fill_nat(note)
-    print("RAW RESPONSE:", nat_raw[:200])  # Optional: log start of raw response
 
     # Clean triple backticks + markdown around JSON
     cleaned = re.sub(r"(^```json\s*|```$)", "", nat_raw.strip(), flags=re.MULTILINE)
