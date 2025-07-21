@@ -1,44 +1,72 @@
-# Entry point for FastAPI app
-import vector_store.faiss_handler
-print("✅ faiss_handler.py loaded:", vector_store.faiss_handler.__file__)
-
+import numpy as np
 import json
+import re
 from embeddings.embedder import Embedder
 from vector_store.faiss_handler import FAISSHandler
 from llm.sgllm import SuggestionGenerator
-import numpy as np
+from nat.nat_filler import NATFiller  
 
-# Load data
-with open("notes/dummy_data.json") as f:
-    data = json.load(f)
 
-print("Needs:", data.get("needs"))
-print("Availabilities:", data.get("availabilities"))
 
-notes = [(note, "need", i) for i, note in enumerate(data.get("needs", []))]
-notes += [(note, "availability", i) for i, note in enumerate(data.get("availabilities", []))]
-
-texts = [n[0] for n in notes]
-print("Texts to embed:", texts)
-
+# Init
+nat_filler = NATFiller(api_key="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")
 embedder = Embedder()
-embeddings = embedder.get_embeddings(texts)
-print(f"Embeddings count: {len(embeddings)}")
-
-embeddings_np = np.array(embeddings).astype("float32")
-print("Embedding shape:", embeddings_np.shape)
-
 indexer = FAISSHandler()
-indexer.add(embeddings_np, [(typ, i) for _, typ, i in notes])
+sgllm = SuggestionGenerator(api_key="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")
 
-similar_pairs = indexer.search(embeddings_np, top_k=5, threshold=0.3)
+# Load raw notes
+with open("notes/user_notes.json") as f:
+    data = json.load(f)["notes"]
 
-sgllm = SuggestionGenerator(api_key="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")
+nats = []
+for i, note in enumerate(data):
+    print(f"\nProcessing Note {i + 1}")
+    nat_raw = nat_filler.fill_nat(note)
+    print("NAT:", nat_raw)
+    
+    # OPTIONAL: clean output from stringified JSON to dict
 
-print("\n--- Suggestions ---\n")
-for (type1, i), (type2, j), score in similar_pairs:
+
+for i, note in enumerate(data):
+    print(f"\nProcessing Note {i + 1}")
+    nat_raw = nat_filler.fill_nat(note)
+    print("RAW RESPONSE:", nat_raw[:200])  # Optional: log start of raw response
+
+    # Clean triple backticks + markdown around JSON
+    cleaned = re.sub(r"(^```json\s*|```$)", "", nat_raw.strip(), flags=re.MULTILINE)
+    nat = json.loads(cleaned)
+
+    nat["original_note"] = note
+    nat["id"] = i
+    nats.append(nat)
+
+
+    import json as pyjson
+    cleaned = re.sub(r"(^```json\s*|```$)", "", nat_raw.strip(), flags=re.MULTILINE)
+    nat = pyjson.loads(cleaned)
+    nat["original_note"] = note
+    nat["id"] = i
+    nats.append(nat)
+
+# Convert NATs into units for VDB
+entries = []
+for nat in nats:
+    for need in nat["resources_needed"]:
+        entries.append((need, "need", nat["id"]))
+    for availability in nat["resources_available"]:
+        entries.append((availability, "availability", nat["id"]))
+
+# Embed and add
+texts = [e[0] for e in entries]
+embeddings = embedder.get_embeddings(texts)
+indexer.add(np.array(embeddings).astype("float32"), [(t, i) for _, t, i in entries])
+
+# Search + Suggest
+similar_pairs = indexer.search(np.array(embeddings).astype("float32"), top_k=5, threshold=0.3)
+for (type1, i), (type2, j), _ in similar_pairs:
     if type1 == "need" and type2 == "availability":
-        suggestion = sgllm.generate(data["needs"][i], data["availabilities"][j])
-        print(f"Need: {data['needs'][i]}")
-        print(f"Availability: {data['availabilities'][j]}")
-        print(f"Suggestion: {suggestion}\n{'-'*50}\n")
+        suggestion = sgllm.generate(entries[i][0], entries[j][0])
+        print(f"\n--- Suggestion ---")
+        print(f"Need: {entries[i][0]}")
+        print(f"Availability: {entries[j][0]}")
+        print(f"Suggestion: {suggestion}")

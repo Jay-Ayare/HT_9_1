@@ -1,12 +1,16 @@
 {
   "needs": [
-    "I want to learn a new programming language.",
-    "I’m trying to get into shape but don’t have a plan.",
-    "I need help preparing for a job interview."
+    "I want to learn how to play the guitar.",
+    "Looking for affordable coworking spaces in the city.",
+    "Need ideas to increase engagement on my blog.",
+    "Seeking volunteers to help with local beach cleanups.",
+    "Want to find a mentor for my startup journey."
   ],
   "availabilities": [
-    "There’s a free online Python course by MIT.",
-    "A friend is a fitness coach and offers guidance.",
-    "There’s a mock interview platform that’s free to use."
+    "There is a community music class every Saturday.",
+    "Local library hosts monthly writing workshops.",
+    "Environmental club organizes beach cleanups monthly.",
+    "A new coworking space offers discounted monthly passes.",
+    "Experienced entrepreneurs hold free mentorship sessions."
   ]
 }
