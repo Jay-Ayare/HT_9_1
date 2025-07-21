@@ -22,21 +22,9 @@ nats = []
 for i, note in enumerate(data):
     print(f"\nProcessing Note {i + 1}")
     nat_raw = nat_filler.fill_nat(note)
-    print("NAT:", nat_raw)
-    
-
-    # Clean triple backticks + markdown around JSON
+    print("RAW RESPONSE:", nat_raw[:200])
     cleaned = re.sub(r"(^```json\s*|```$)", "", nat_raw.strip(), flags=re.MULTILINE)
-    nat = json.loads(cleaned)
-
-    nat["original_note"] = note
-    nat["id"] = i
-    nats.append(nat)
-
-
-    import json as pyjson
-    cleaned = re.sub(r"(^```json\s*|```$)", "", nat_raw.strip(), flags=re.MULTILINE)
-    nat = pyjson.loads(cleaned)
+    nat = json.loads(cleaned)  # Use standard json.loads
     nat["original_note"] = note
     nat["id"] = i
     nats.append(nat)
@@ -56,10 +44,15 @@ indexer.add(np.array(embeddings).astype("float32"), [(t, i) for _, t, i in entri
 
 # Search + Suggest
 similar_pairs = indexer.search(np.array(embeddings).astype("float32"), top_k=5, threshold=0.3)
-for (type1, i), (type2, j), _ in similar_pairs:
+for query_idx, result_idx, _ in similar_pairs:
+    type1 = entries[query_idx][1]
+    type2 = entries[result_idx][1]
+
     if type1 == "need" and type2 == "availability":
-        suggestion = sgllm.generate(entries[i][0], entries[j][0])
+        need_text = entries[query_idx][0]
+        availability_text = entries[result_idx][0]
+        suggestion = sgllm.generate(need_text, availability_text)
         print(f"\n--- Suggestion ---")
-        print(f"Need: {entries[i][0]}")
-        print(f"Availability: {entries[j][0]}")
+        print(f"Need: {need_text}")
+        print(f"Availability: {availability_text}")
         print(f"Suggestion: {suggestion}")
