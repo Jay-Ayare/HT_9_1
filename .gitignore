@@ -194,6 +194,12 @@ cython_debug/
 # PyPI configuration file
 .pypirc
 
+# HT Cognition Engine Cache
+# Ignore processed data and vector store artifacts
+vector_store/*.index
+vector_store/*.json
+vector_store/*.npy
+
 # Cursor
 #  Cursor is an AI-powered code editor. `.cursorignore` specifies files/directories to
 #  exclude from AI features like autocomplete and code analysis. Recommended for sensitive data

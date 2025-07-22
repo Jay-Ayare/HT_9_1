@@ -1,6 +1,7 @@
 # nat/nat_filler.py
 
 import requests
+import json
 
 class NATFiller:
     def __init__(self, api_key: str):
@@ -29,6 +30,14 @@ Return your answer in JSON with keys: "sentiments", "resources_needed", "resourc
             "Content-Type": "application/json"
         }
 
-        response = requests.post("https://openrouter.ai/api/v1/chat/completions", json=payload, headers=headers)
-        print("RAW RESPONSE:", response.status_code, response.text)
-        return response.json()["choices"][0]["message"]["content"]
+        try:
+            response = requests.post("https://openrouter.ai/api/v1/chat/completions", json=payload, headers=headers)
+            print("RAW RESPONSE:", response.status_code, response.text)
+            response.raise_for_status()  # Raise an exception for bad status codes (4xx or 5xx)
+            return response.json()["choices"][0]["message"]["content"]
+        except requests.exceptions.RequestException as e:
+            print(f"An API request error occurred: {e}")
+            return "{}"
+        except (KeyError, IndexError, json.JSONDecodeError) as e:
+            print(f"Error parsing LLM response: {e}")
+            return "{}"

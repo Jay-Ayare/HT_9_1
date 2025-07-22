@@ -1,0 +1,89 @@
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap');
+@import 'react-loading-skeleton/dist/skeleton.css';
+
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+/* Custom scrollbar styles */
+::-webkit-scrollbar {
+  width: 6px;
+}
+::-webkit-scrollbar-track {
+  background: #1a1a2e;
+}
+::-webkit-scrollbar-thumb {
+  background: #444466;
+  border-radius: 3px;
+}
+::-webkit-scrollbar-thumb:hover {
+  background: #7f5af0;
+}
+
+/* Shimmer loading animation */
+.shimmer {
+  background: linear-gradient(90deg, #1a1a2e 0px, #444466 40px, #1a1a2e 80px);
+  background-size: 200px 100%;
+  animation: shimmer 1.5s infinite linear;
+}
+
+@keyframes shimmer {
+  0% {
+    background-position: -200px 0;
+  }
+  100% {
+    background-position: 200px 0;
+  }
+}
+
+/* Gradient text styling */
+.gradient-text {
+  background: linear-gradient(135deg, #7f5af0 0%, #2563eb 100%);
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  background-clip: text;
+  text-fill-color: transparent;
+}
+
+/* Pulse glow animation for important elements */
+@keyframes pulse-glow {
+  0%, 100% {
+    box-shadow: 0 0 5px rgba(127, 90, 240, 0.5);
+  }
+  50% {
+    box-shadow: 0 0 20px rgba(127, 90, 240, 0.8);
+  }
+}
+
+/* Float animation (used with pulse) */
+@keyframes float {
+  0%, 100% {
+    transform: translateY(0px);
+  }
+  50% {
+    transform: translateY(-5px);
+  }
+}
+
+/* Wave loading animation */
+@keyframes wave {
+  0%, 60%, 100% {
+    transform: initial;
+  }
+  30% {
+    transform: translateY(-15px);
+  }
+}
+
+/* Input placeholder focus */
+input:focus::placeholder,
+textarea:focus::placeholder {
+  color: rgba(224, 224, 255, 0.6);
+  transition: color 0.3s ease;
+}
+
+/* Button focus-visible styles */
+button:focus-visible {
+  outline: 2px solid #7f5af0;
+  outline-offset: 2px;
+}
