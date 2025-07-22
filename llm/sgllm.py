@@ -12,7 +12,7 @@ class SuggestionGenerator:
             "Generate a thoughtful, creative, actionable suggestion connecting the two."
         )
         payload = {
-            "model": "google/gemma-3-4b-it:free",
+            "model": "meta-llama/llama-4-scout-17b-16e-instruct",
             "messages": [{"role": "user", "content": prompt}]
         }
         headers = {
@@ -20,7 +20,8 @@ class SuggestionGenerator:
             "Content-Type": "application/json"
         }
         try:
-            response = requests.post("https://openrouter.ai/api/v1/chat/completions", json=payload, headers=headers)
+            url = "https://api.groq.com/openai/v1/chat/completions"
+            response = requests.post(url, json=payload, headers=headers)
             response.raise_for_status()
             return response.json()["choices"][0]["message"]["content"]
         except requests.exceptions.RequestException as e:

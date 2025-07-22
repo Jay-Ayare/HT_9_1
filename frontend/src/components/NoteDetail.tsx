@@ -31,7 +31,8 @@ export const NoteDetail: React.FC<NoteDetailProps> = ({
     }));
   };
 
-  const formatDate = (date: Date) => {
+  const formatDate = (date: Date | string) => {
+    const dateObj = date instanceof Date ? date : new Date(date);
     return new Intl.DateTimeFormat('en-US', {
       weekday: 'long',
       year: 'numeric',
@@ -39,10 +40,18 @@ export const NoteDetail: React.FC<NoteDetailProps> = ({
       day: 'numeric',
       hour: '2-digit',
       minute: '2-digit'
-    }).format(date);
+    }).format(dateObj);
   };
 
   const noteSuggestions = suggestions.filter(s => s.noteId === note.id);
+  
+  // Debug logging
+  console.log('NoteDetail Debug:', {
+    noteId: note.id,
+    totalSuggestions: suggestions.length,
+    suggestions: suggestions,
+    noteSuggestions: noteSuggestions
+  });
 
   return (
     <motion.div 

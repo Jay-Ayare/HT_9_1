@@ -34,13 +34,14 @@ export const NoteList: React.FC<NoteListProps> = ({
     );
   });
 
-  const formatDate = (date: Date) => {
+  const formatDate = (date: Date | string) => {
+    const dateObj = date instanceof Date ? date : new Date(date);
     return new Intl.DateTimeFormat('en-US', {
       month: 'short',
       day: 'numeric',
       hour: '2-digit',
       minute: '2-digit'
-    }).format(date);
+    }).format(dateObj);
   };
 
   const truncateText = (text: string, maxLength: number = 100) => {

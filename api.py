@@ -42,8 +42,13 @@ def process_note_with_nat(note_text: str, note_id: int) -> Dict:
     """Process a single note through NAT extraction."""
     try:
         nat_raw = nat_filler.fill_nat(note_text)
-        # Clean JSON response
-        cleaned = re.sub(r"(^```json\s*|```$)", "", nat_raw.strip(), flags=re.MULTILINE)
+        # Extract JSON from markdown code blocks and explanatory text
+        json_match = re.search(r'```json\s*\n(.*?)\n```', nat_raw, re.DOTALL)
+        if json_match:
+            cleaned = json_match.group(1).strip()
+        else:
+            # Fallback: try to clean the old way
+            cleaned = re.sub(r"(^```json\s*|```$)", "", nat_raw.strip(), flags=re.MULTILINE)
         nat = json.loads(cleaned)
         
         # Ensure required fields exist
@@ -68,19 +73,40 @@ def find_connections_and_generate_suggestions(entries: List[Tuple], embeddings: 
     """Find connections between needs and availabilities, generate suggestions."""
     suggestions = []
     
+    print(f"DEBUG: Processing {len(entries)} entries with {len(embeddings)} embeddings")
+    for i, entry in enumerate(entries):
+        print(f"  Entry {i}: {entry}")
+    
     if not entries:
+        print("DEBUG: No entries to process")
         return suggestions
     
     try:
         # Build or load index
         if len(embeddings) > 0:
-            indexer.add(embeddings)
-            similar_pairs = indexer.search(embeddings, top_k=5, threshold=SIMILARITY_THRESHOLD)
+            # Use numpy-based similarity instead of FAISS to avoid threading issues
+            print("DEBUG: Computing similarity using numpy...")
+            from sklearn.metrics.pairwise import cosine_similarity
+            
+            # Compute cosine similarity matrix
+            similarity_matrix = cosine_similarity(embeddings)
+            print(f"DEBUG: Similarity matrix shape: {similarity_matrix.shape}")
+            
+            # Find pairs above threshold
+            similar_pairs = []
+            for i in range(len(embeddings)):
+                for j in range(len(embeddings)):
+                    if i != j and similarity_matrix[i][j] > SIMILARITY_THRESHOLD:
+                        similar_pairs.append((i, j, float(similarity_matrix[i][j])))
+            
+            print("DEBUG: Similarity computation completed successfully")
+            print(f"DEBUG: Found {len(similar_pairs)} similar pairs above threshold {SIMILARITY_THRESHOLD}")
             
             suggestion_id = 1
             for query_idx, result_idx, score in similar_pairs:
                 type1 = entries[query_idx][1]
                 type2 = entries[result_idx][1]
+                print(f"DEBUG: Pair {query_idx}->{result_idx}, types: {type1}->{type2}, score: {score}")
                 
                 # Only connect needs with availabilities
                 if type1 == "need" and type2 == "availability":
@@ -89,25 +115,29 @@ def find_connections_and_generate_suggestions(entries: List[Tuple], embeddings: 
                     need_note_id = entries[query_idx][2]
                     availability_note_id = entries[result_idx][2]
                     
+                    print(f"DEBUG: Generating suggestion for need '{need_text}' + availability '{availability_text}'")
+                    
                     # Generate suggestion using LLM
-                    suggestion_text = sgllm.generate(need_text, availability_text)
+                    try:
+                        suggestion_text = sgllm.generate(need_text, availability_text)
+                        print(f"DEBUG: Generated suggestion: {suggestion_text[:100]}...")
+                    except Exception as e:
+                        print(f"DEBUG: LLM generation failed: {e}")
+                        suggestion_text = f"Could not generate suggestion: {e}"
                     
                     suggestions.append({
                         "id": f"sugg_{suggestion_id}",
-                        "type": "connection",
-                        "title": f"Resource Connection: {availability_text[:50]}...",
-                        "description": suggestion_text,
-                        "confidence": float(score),
-                        "relatedNoteIds": [str(need_note_id), str(availability_note_id)],
-                        "category": "resource_matching",
+                        "noteId": str(need_note_id),  # Frontend expects noteId (singular)
                         "need": need_text,
-                        "availability": availability_text
+                        "availability": availability_text,
+                        "suggestion": suggestion_text  # Frontend expects 'suggestion' not 'description'
                     })
                     suggestion_id += 1
                     
     except Exception as e:
         print(f"Error generating suggestions: {e}")
     
+    print(f"DEBUG: Generated {len(suggestions)} suggestions")
     return suggestions
 
 @app.route('/api/notes', methods=['POST'])
@@ -158,10 +188,13 @@ def submit_notes():
                 "processed": True
             })
         
-        return jsonify({
+        response_data = {
             "processed_notes": processed_notes,
             "suggestions": suggestions
-        })
+        }
+        print(f"DEBUG: Returning response with {len(processed_notes)} notes and {len(suggestions)} suggestions")
+        print(f"DEBUG: First suggestion sample: {suggestions[0] if suggestions else 'None'}")
+        return jsonify(response_data)
         
     except Exception as e:
         print(f"Error in submit_notes: {e}")

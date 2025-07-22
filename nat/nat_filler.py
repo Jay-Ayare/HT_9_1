@@ -22,7 +22,7 @@ Extract the following:
 Return your answer in JSON with keys: "sentiments", "resources_needed", "resources_available"
 """
         payload = {
-            "model": "google/gemma-3-4b-it:free",
+            "model": "meta-llama/llama-4-scout-17b-16e-instruct",
             "messages": [{"role": "user", "content": prompt.strip()}]
         }
         headers = {
@@ -31,7 +31,8 @@ Return your answer in JSON with keys: "sentiments", "resources_needed", "resourc
         }
 
         try:
-            response = requests.post("https://openrouter.ai/api/v1/chat/completions", json=payload, headers=headers)
+            url = "https://api.groq.com/openai/v1/chat/completions"
+            response = requests.post(url, json=payload, headers=headers)
             print("RAW RESPONSE:", response.status_code, response.text)
             response.raise_for_status()  # Raise an exception for bad status codes (4xx or 5xx)
             return response.json()["choices"][0]["message"]["content"]
