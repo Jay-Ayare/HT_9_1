@@ -22,7 +22,7 @@ Extract the following:
 Return your answer in JSON with keys: "sentiments", "resources_needed", "resources_available"
 """
         payload = {
-            "model": "tngtech/deepseek-r1t2-chimera:free",
+            "model": "google/gemma-3-4b-it:free",
             "messages": [{"role": "user", "content": prompt.strip()}]
         }
         headers = {
