@@ -1,149 +1,206 @@
+from flask import Flask, request, jsonify
+from flask_cors import CORS
 import numpy as np
-import os
-import re
 import json
+import os
 import sys
-from dotenv import load_dotenv
-from fastapi import FastAPI
+import re
+from datetime import datetime
+from typing import List, Dict, Tuple
 
-# Add the project root to the Python path to resolve module imports
+# Add the project root to the Python path
 sys.path.insert(0, os.path.abspath(os.path.dirname(__file__)))
-from fastapi.middleware.cors import CORSMiddleware
-from pydantic import BaseModel
-from typing import List
-
+from dotenv import load_dotenv
 from embeddings.embedder import Embedder
 from vector_store.faiss_handler import FAISSHandler
 from llm.sgllm import SuggestionGenerator
 from nat.nat_filler import NATFiller
 
-# --- Models ---
-class NotesRequest(BaseModel):
-    notes: List[str]
-
-class Suggestion(BaseModel):
-    need: str
-    availability: str
-    suggestion: str
-    score: float
-
-class ProcessedNote(BaseModel):
-    id: str
-    content: str
-    sentiments: List[str]
-    resources_needed: List[str]
-    resources_available: List[str]
-
-class ProcessResponse(BaseModel):
-    processed_notes: List[ProcessedNote]
-    suggestions: List[Suggestion]
-
-# --- Initialization ---
+# Load environment variables
 load_dotenv()
 
-app = FastAPI(
-    title="HT - The Cognition Engine API",
-    description="Processes user notes to find and suggest non-obvious connections.",
-    version="0.1.0",
-)
+app = Flask(__name__)
+CORS(app)  # Enable CORS for frontend
 
-# Allow requests from your React frontend (assuming it runs on localhost:3000)
-app.add_middleware(
-    CORSMiddleware,
-    allow_origins=["http://localhost:5173"],
-    allow_credentials=True,
-    allow_methods=["*"],
-    allow_headers=["*"],
-)
+# --- Constants ---
+SIMILARITY_THRESHOLD = 0.3
+FAISS_INDEX_PATH = "vector_store/ht.index"
+ENTRIES_FILE_PATH = "vector_store/entries.json"
+EMBEDDINGS_FILE_PATH = "vector_store/embeddings.npy"
 
+# --- Global instances (initialize once) ---
 API_KEY = os.getenv("OPENROUTER_API_KEY")
 if not API_KEY:
-    raise ValueError("OPENROUTER_API_KEY not found in environment variables.")
+    raise ValueError("OPENROUTER_API_KEY not found in environment variables")
 
-embedder = Embedder()
-sgllm = SuggestionGenerator(api_key=API_KEY)
 nat_filler = NATFiller(api_key=API_KEY)
+embedder = Embedder()
+indexer = FAISSHandler()
+sgllm = SuggestionGenerator(api_key=API_KEY)
 
-# --- Helper Functions (adapted from main.py) ---
+def process_note_with_nat(note_text: str, note_id: int) -> Dict:
+    """Process a single note through NAT extraction."""
+    try:
+        nat_raw = nat_filler.fill_nat(note_text)
+        # Clean JSON response
+        cleaned = re.sub(r"(^```json\s*|```$)", "", nat_raw.strip(), flags=re.MULTILINE)
+        nat = json.loads(cleaned)
+        
+        # Ensure required fields exist
+        nat.setdefault("sentiments", [])
+        nat.setdefault("resources_needed", [])
+        nat.setdefault("resources_available", [])
+        nat["original_note"] = note_text
+        nat["id"] = note_id
+        
+        return nat
+    except (json.JSONDecodeError, TypeError) as e:
+        print(f"Error parsing JSON for note {note_id}: {e}")
+        return {
+            "sentiments": [],
+            "resources_needed": [],
+            "resources_available": [],
+            "original_note": note_text,
+            "id": note_id
+        }
 
-def process_notes_api(notes: list[str], nat_filler: NATFiller) -> list[dict]:
-    """Processes raw notes into structured NATs without console output."""
-    nats = []
-    for i, note in enumerate(notes):
-        nat_raw = nat_filler.fill_nat(note)
-        try:
-            cleaned = re.sub(r"(^```json\s*|```$)", "", nat_raw.strip(), flags=re.MULTILINE)
-            nat = json.loads(cleaned)
-            nat.setdefault("resources_needed", [])
-            nat.setdefault("resources_available", [])
-            nat["original_note"] = note
-            nat["id"] = i
-            nats.append(nat)
-        except (json.JSONDecodeError, TypeError):
-            # In a real app, you'd log this error
-            print(f"Could not decode JSON for Note {i+1}. Skipping.")
-    return nats
-
-def prepare_vdb_entries(nats: list[dict]) -> list[tuple]:
-    """Converts structured NATs into a flat list of entries for the vector database."""
-    entries = []
-    for nat in nats:
-        for need in nat.get("resources_needed", []):
-            entries.append((need, "need", nat["id"]))
-        for availability in nat.get("resources_available", []):
-            entries.append((availability, "availability", nat["id"]))
-    return entries
-
-# --- API Endpoint ---
-
-@app.post("/process-notes", response_model=ProcessResponse)
-async def process_notes_endpoint(request: NotesRequest):
-    """
-    Receives a list of notes, processes them, and returns suggestions.
-    """
-    # 1. Process notes to get structured NATs
-    nats = process_notes_api(request.notes, nat_filler)
-    
-    # 2. Prepare entries for the vector database
-    entries = prepare_vdb_entries(nats)
-    if not entries:
-        return []
-
-    # 3. Embed entries and build the index
-    # For an API, we rebuild the index on each call.
-    # For a production system, you'd use a persistent vector DB.
-    indexer = FAISSHandler()
-    texts = [e[0] for e in entries]
-    embeddings = np.array(embedder.get_embeddings(texts)).astype("float32")
-    indexer.add(embeddings)
-
-    # 4. Search for connections and generate suggestions
-    similar_pairs = indexer.search(embeddings, top_k=5, threshold=0.3)
+def find_connections_and_generate_suggestions(entries: List[Tuple], embeddings: np.ndarray) -> List[Dict]:
+    """Find connections between needs and availabilities, generate suggestions."""
     suggestions = []
-    for query_idx, result_idx, score in similar_pairs:
-        type1 = entries[query_idx][1]
-        type2 = entries[result_idx][1]
+    
+    if not entries:
+        return suggestions
+    
+    try:
+        # Build or load index
+        if len(embeddings) > 0:
+            indexer.add(embeddings)
+            similar_pairs = indexer.search(embeddings, top_k=5, threshold=SIMILARITY_THRESHOLD)
+            
+            suggestion_id = 1
+            for query_idx, result_idx, score in similar_pairs:
+                type1 = entries[query_idx][1]
+                type2 = entries[result_idx][1]
+                
+                # Only connect needs with availabilities
+                if type1 == "need" and type2 == "availability":
+                    need_text = entries[query_idx][0]
+                    availability_text = entries[result_idx][0]
+                    need_note_id = entries[query_idx][2]
+                    availability_note_id = entries[result_idx][2]
+                    
+                    # Generate suggestion using LLM
+                    suggestion_text = sgllm.generate(need_text, availability_text)
+                    
+                    suggestions.append({
+                        "id": f"sugg_{suggestion_id}",
+                        "type": "connection",
+                        "title": f"Resource Connection: {availability_text[:50]}...",
+                        "description": suggestion_text,
+                        "confidence": float(score),
+                        "relatedNoteIds": [str(need_note_id), str(availability_note_id)],
+                        "category": "resource_matching",
+                        "need": need_text,
+                        "availability": availability_text
+                    })
+                    suggestion_id += 1
+                    
+    except Exception as e:
+        print(f"Error generating suggestions: {e}")
+    
+    return suggestions
 
-        if type1 == "need" and type2 == "availability":
-            need_text = entries[query_idx][0]
-            availability_text = entries[result_idx][0]
-            suggestion_text = sgllm.generate(need_text, availability_text)
-            suggestions.append({
-                "need": need_text,
-                "availability": availability_text,
-                "suggestion": suggestion_text,
-                "score": score,
+@app.route('/api/notes', methods=['POST'])
+def submit_notes():
+    """Process submitted notes and return analyzed data with suggestions."""
+    try:
+        data = request.get_json()
+        notes = data.get('notes', [])
+        
+        if not notes:
+            return jsonify({"error": "No notes provided"}), 400
+        
+        # Process each note through NAT
+        processed_nats = []
+        for i, note_text in enumerate(notes):
+            nat = process_note_with_nat(note_text, i)
+            processed_nats.append(nat)
+        
+        # Create entries for embedding and indexing
+        entries = []
+        for nat in processed_nats:
+            # Add needs
+            for need in nat.get("resources_needed", []):
+                entries.append((need, "need", nat["id"]))
+            # Add availabilities  
+            for availability in nat.get("resources_available", []):
+                entries.append((availability, "availability", nat["id"]))
+        
+        # Generate embeddings
+        embeddings = np.array([])
+        suggestions = []
+        
+        if entries:
+            texts = [e[0] for e in entries]
+            embeddings = np.array(embedder.get_embeddings(texts)).astype("float32")
+            suggestions = find_connections_and_generate_suggestions(entries, embeddings)
+        
+        # Format processed notes for frontend
+        processed_notes = []
+        for nat in processed_nats:
+            processed_notes.append({
+                "id": str(nat["id"]),
+                "content": nat["original_note"],
+                "timestamp": datetime.now().isoformat(),
+                "sentiments": nat.get("sentiments", []),
+                "resources_needed": nat.get("resources_needed", []),
+                "resources_available": nat.get("resources_available", []),
+                "processed": True
             })
+        
+        return jsonify({
+            "processed_notes": processed_notes,
+            "suggestions": suggestions
+        })
+        
+    except Exception as e:
+        print(f"Error in submit_notes: {e}")
+        return jsonify({"error": str(e)}), 500
 
-    # 5. Prepare the processed notes for the response
-    processed_notes = [
-        {
-            "id": str(nat["id"]),
-            "content": nat["original_note"],
-            "sentiments": nat["sentiments"],
-            "resources_needed": nat["resources_needed"],
-            "resources_available": nat["resources_available"],
-        } for nat in nats
-    ]
+@app.route('/api/suggestions', methods=['GET'])
+def get_suggestions():
+    """Get all existing suggestions."""
+    try:
+        # This would typically load from a database
+        # For now, return empty array as suggestions are generated per request
+        return jsonify([])
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
 
-    return {"processed_notes": processed_notes, "suggestions": suggestions}
+@app.route('/api/notes/<note_id>/reprocess', methods=['POST'])
+def reprocess_note(note_id):
+    """Reprocess a specific note."""
+    try:
+        # This would typically reload the note from database and reprocess
+        # For now, return a placeholder response
+        return jsonify({
+            "id": note_id,
+            "content": "Reprocessed note content",
+            "timestamp": datetime.now().isoformat(),
+            "sentiments": ["hopeful", "determined"],
+            "resources_needed": ["guidance"],
+            "resources_available": ["experience"],
+            "processed": True
+        })
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
+
+@app.route('/api/health', methods=['GET'])
+def health_check():
+    """Health check endpoint."""
+    return jsonify({"status": "healthy", "timestamp": datetime.now().isoformat()})
+
+if __name__ == '__main__':
+    print("Starting HiddenThread API server...")
+    print(f"Environment variables loaded: API_KEY={'✓' if API_KEY else '✗'}")
+    app.run(debug=True, port=3001)

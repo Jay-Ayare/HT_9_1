@@ -1,8 +1,7 @@
 import { Note, ProcessedNote, Suggestion, ApiError } from '../types';
-import { mockSuggestions } from './mockData';
 
 const API_BASE = import.meta.env.VITE_REACT_APP_API_URL || 'http://localhost:3001';
-const USE_MOCK_DATA = true; // Set to false when backend is available
+const USE_MOCK_DATA = false; // Set to true to use mock data during development
 
 interface SubmitNotesResponse {
   processed_notes: ProcessedNote[];
@@ -12,10 +11,9 @@ interface SubmitNotesResponse {
 class ApiService {
   async submitNotes(notes: string[]): Promise<SubmitNotesResponse> {
     if (USE_MOCK_DATA) {
-      // Simulate API delay
+      // Keep mock data for development
       await new Promise(resolve => setTimeout(resolve, 2000));
       
-      // Mock processing - your App.tsx expects this exact format
       const processed_notes: ProcessedNote[] = notes.map((content, index) => ({
         id: Date.now().toString() + index,
         content,
@@ -28,12 +26,22 @@ class ApiService {
 
       return {
         processed_notes,
-        suggestions: mockSuggestions.slice(0, 2), // Return a few suggestions
+        suggestions: [{
+          id: 'mock-sugg-1',
+          type: 'connection',
+          title: 'Mock Suggestion',
+          description: 'This is a mock suggestion for development',
+          confidence: 0.8,
+          relatedNoteIds: [processed_notes[0]?.id || ''],
+          category: 'mock',
+        }],
       };
     }
 
     try {
-      const response = await fetch(`${API_BASE}/notes`, {
+      console.log('Submitting notes to backend:', notes);
+      
+      const response = await fetch(`${API_BASE}/api/notes`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -42,24 +50,28 @@ class ApiService {
       });
 
       if (!response.ok) {
-        throw new Error(`HTTP ${response.status}: ${response.statusText}`);
+        const errorText = await response.text();
+        throw new Error(`HTTP ${response.status}: ${response.statusText} - ${errorText}`);
       }
 
-      return await response.json();
+      const result = await response.json();
+      console.log('Backend response:', result);
+      
+      return result;
     } catch (error) {
+      console.error('Error submitting notes:', error);
       throw this.handleError(error);
     }
   }
 
   async getSuggestions(): Promise<Suggestion[]> {
     if (USE_MOCK_DATA) {
-      // Simulate API delay
       await new Promise(resolve => setTimeout(resolve, 1000));
-      return mockSuggestions;
+      return [];
     }
 
     try {
-      const response = await fetch(`${API_BASE}/suggestions`);
+      const response = await fetch(`${API_BASE}/api/suggestions`);
       
       if (!response.ok) {
         throw new Error(`HTTP ${response.status}: ${response.statusText}`);
@@ -67,6 +79,7 @@ class ApiService {
 
       return await response.json();
     } catch (error) {
+      console.error('Error fetching suggestions:', error);
       throw this.handleError(error);
     }
   }
@@ -86,7 +99,7 @@ class ApiService {
     }
 
     try {
-      const response = await fetch(`${API_BASE}/notes/${noteId}/reprocess`, {
+      const response = await fetch(`${API_BASE}/api/notes/${noteId}/reprocess`, {
         method: 'POST',
       });
 
@@ -96,6 +109,22 @@ class ApiService {
 
       return await response.json();
     } catch (error) {
+      console.error('Error reprocessing note:', error);
+      throw this.handleError(error);
+    }
+  }
+
+  async healthCheck(): Promise<{ status: string; timestamp: string }> {
+    try {
+      const response = await fetch(`${API_BASE}/api/health`);
+      
+      if (!response.ok) {
+        throw new Error(`HTTP ${response.status}: ${response.statusText}`);
+      }
+
+      return await response.json();
+    } catch (error) {
+      console.error('Health check failed:', error);
       throw this.handleError(error);
     }
   }
@@ -103,14 +132,14 @@ class ApiService {
   private handleError(error: any): ApiError {
     if (error.name === 'TypeError' && error.message.includes('fetch')) {
       return {
-        message: 'Unable to connect to server. Please check your connection.',
+        message: 'Unable to connect to server. Please check if the backend is running on port 3001.',
         status: 0
       };
     }
 
     return {
       message: error.message || 'An unexpected error occurred',
-      status: error.status
+      status: error.status || 500
     };
   }
 }
