@@ -4,3 +4,7 @@ faiss-cpu
 transformers
 openai
 requests
+python-dotenv
+sentence_transformers
+
+# cmd to install all these : pip install -r requirements.txt

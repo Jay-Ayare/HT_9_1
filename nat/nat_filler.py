@@ -19,7 +19,7 @@ Extract the following:
 2. Resources needed (concrete or abstract things the user desires).
 3. Resources available (concrete or abstract things the user already has access to).
 
-Return your answer in JSON with keys: "sentiments", "resources_needed", "resources_available"
+Return ONLY a valid JSON object with keys: "sentiments", "resources_needed", "resources_available". No explanation, no markdown, just the JSON.
 """
         payload = {
             "model": "meta-llama/llama-4-scout-17b-16e-instruct",
