@@ -29,9 +29,9 @@ ENTRIES_FILE_PATH = "vector_store/entries.json"
 EMBEDDINGS_FILE_PATH = "vector_store/embeddings.npy"
 
 # --- Global instances (initialize once) ---
-API_KEY = os.getenv("OPENROUTER_API_KEY")
+API_KEY = os.getenv("GEMINI_API_KEY")
 if not API_KEY:
-    raise ValueError("OPENROUTER_API_KEY not found in environment variables")
+    raise ValueError("GEMINI_API_KEY not found in environment variables")
 
 nat_filler = NATFiller(api_key=API_KEY)
 embedder = Embedder()

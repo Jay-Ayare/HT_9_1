@@ -19,23 +19,31 @@ Extract the following:
 2. Resources needed (concrete or abstract things the user desires).
 3. Resources available (concrete or abstract things the user already has access to).
 
-Return your answer in JSON with keys: "sentiments", "resources_needed", "resources_available"
+Return ONLY a valid JSON object with keys: "sentiments", "resources_needed", "resources_available"
+Do not include any explanation, markdown formatting, or additional text. Only return the JSON.
 """
         payload = {
-            "model": "meta-llama/llama-4-scout-17b-16e-instruct",
-            "messages": [{"role": "user", "content": prompt.strip()}]
+            "contents": [
+                {
+                    "parts": [
+                        {
+                            "text": prompt.strip()
+                        }
+                    ]
+                }
+            ]
         }
         headers = {
-            "Authorization": f"Bearer {self.api_key}",
+            "X-goog-api-key": self.api_key,
             "Content-Type": "application/json"
         }
 
         try:
-            url = "https://api.groq.com/openai/v1/chat/completions"
+            url = "https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent"
             response = requests.post(url, json=payload, headers=headers)
             print("RAW RESPONSE:", response.status_code, response.text)
             response.raise_for_status()  # Raise an exception for bad status codes (4xx or 5xx)
-            return response.json()["choices"][0]["message"]["content"]
+            return response.json()["candidates"][0]["content"]["parts"][0]["text"]
         except requests.exceptions.RequestException as e:
             print(f"An API request error occurred: {e}")
             return "{}"

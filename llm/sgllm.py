@@ -8,22 +8,36 @@ class SuggestionGenerator:
     def generate(self, need: str, availability: str):
         prompt = (
             f"A person wrote this as a problem note: \"{need}\"\n"
-            f"Another resource note says: \"{availability}\"\n"
-            "Generate a thoughtful, creative, actionable suggestion connecting the two."
+            f"Another resource note says: \"{availability}\"\n\n"
+            "Generate a thoughtful, creative, actionable suggestion connecting the two.\n\n"
+            "Format your response with:\n"
+            "- Clear paragraph breaks using double line breaks\n"
+            "- **Bold** for headings and key concepts\n"
+            "- *Italic* for emphasis\n"
+            "- Well-structured sections (Why it works, Action steps, etc.)\n"
+            "- Easy-to-read formatting with proper spacing\n\n"
+            "Make it engaging, actionable, and well-formatted for reading."
         )
         payload = {
-            "model": "meta-llama/llama-4-scout-17b-16e-instruct",
-            "messages": [{"role": "user", "content": prompt}]
+            "contents": [
+                {
+                    "parts": [
+                        {
+                            "text": prompt
+                        }
+                    ]
+                }
+            ]
         }
         headers = {
-            "Authorization": f"Bearer {self.api_key}",
+            "X-goog-api-key": self.api_key,
             "Content-Type": "application/json"
         }
         try:
-            url = "https://api.groq.com/openai/v1/chat/completions"
+            url = "https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent"
             response = requests.post(url, json=payload, headers=headers)
             response.raise_for_status()
-            return response.json()["choices"][0]["message"]["content"]
+            return response.json()["candidates"][0]["content"]["parts"][0]["text"]
         except requests.exceptions.RequestException as e:
             print(f"An API request error occurred: {e}")
         except (KeyError, IndexError, json.JSONDecodeError) as e:

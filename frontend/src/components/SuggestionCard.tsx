@@ -3,6 +3,54 @@ import { Suggestion } from '../types';
 import { Lightbulb, ArrowRight, ChevronDown, ChevronUp } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
 
+// Function to convert markdown formatting to JSX
+const parseMarkdown = (text: string): React.ReactNode => {
+  // Split by double line breaks first to create paragraphs
+  const paragraphs = text.split(/\n\n+/);
+  
+  return (
+    <>
+      {paragraphs.map((paragraph, paragraphIndex) => {
+        // Handle both bold and italic within each paragraph
+        const processedText = paragraph
+          .split(/(\*\*.*?\*\*|\*.*?\*)/)
+          .map((part, index) => {
+            if (part.startsWith('**') && part.endsWith('**')) {
+              // Bold text
+              return (
+                <strong key={`bold-${paragraphIndex}-${index}`} className="font-semibold text-[#e0e0ff]">
+                  {part.slice(2, -2)}
+                </strong>
+              );
+            } else if (part.startsWith('*') && part.endsWith('*') && !part.startsWith('**')) {
+              // Italic text (but not bold)
+              return (
+                <em key={`italic-${paragraphIndex}-${index}`} className="italic text-[#e0e0ff]/80">
+                  {part.slice(1, -1)}
+                </em>
+              );
+            } else {
+              // Regular text - handle single line breaks within paragraphs
+              return part.split('\n').map((line, lineIndex, lines) => (
+                <React.Fragment key={`line-${paragraphIndex}-${index}-${lineIndex}`}>
+                  {line}
+                  {lineIndex < lines.length - 1 && <br />}
+                </React.Fragment>
+              ));
+            }
+          })
+          .filter(part => part !== ''); // Remove empty strings
+        
+        return (
+          <p key={`paragraph-${paragraphIndex}`} className="mb-3 last:mb-0">
+            {processedText}
+          </p>
+        );
+      })}
+    </>
+  );
+};
+
 interface SuggestionCardProps {
   suggestion: Suggestion;
 }
@@ -100,8 +148,8 @@ export const SuggestionCard: React.FC<SuggestionCardProps> = ({ suggestion }) =>
               animate={{ y: 0 }}
               className="bg-[#0f0f1a] p-4 rounded-lg border border-[#444466] backdrop-blur-sm"
             >
-              <p className="text-[#e0e0ff]/90 leading-relaxed">
-                {displayedText}
+              <div className="text-[#e0e0ff]/90 leading-relaxed">
+                {parseMarkdown(displayedText)}
                 {isTyping && (
                   <motion.span
                     animate={{ opacity: [1, 0] }}
@@ -109,7 +157,7 @@ export const SuggestionCard: React.FC<SuggestionCardProps> = ({ suggestion }) =>
                     className="inline-block w-2 h-5 bg-[#7f5af0] ml-1"
                   />
                 )}
-              </p>
+              </div>
             </motion.div>
           </motion.div>
         )}

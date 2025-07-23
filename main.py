@@ -64,10 +64,15 @@ def find_and_generate_suggestions(
             with console.status("[bold green]Generating suggestion..."):
                 suggestion_text = sgllm.generate(need_text, availability_text)
 
+            # Convert markdown formatting to Rich markup
+            formatted_suggestion = re.sub(r'\*\*(.*?)\*\*', r'[bold]\1[/bold]', suggestion_text)
+            # Also handle single asterisks for italic
+            formatted_suggestion = re.sub(r'\*(.*?)\*', r'[italic]\1[/italic]', formatted_suggestion)
+            
             suggestion_panel = Panel(
                 f"[bold]Need:[/] [italic]{need_text}[/]\n"
                 f"[bold]Availability:[/] [italic]{availability_text}[/]\n\n"
-                f"---\n[bold bright_green]Suggestion:[/] {suggestion_text}",
+                f"---\n[bold bright_green]Suggestion:[/] {formatted_suggestion}",
                 title="[bold yellow]💡 New Connection Found[/]",
                 border_style="green",
                 subtitle=f"Similarity: {score:.2f}",
@@ -80,9 +85,9 @@ def main():
     load_dotenv()
     console = Console()
 
-    API_KEY = os.getenv("OPENROUTER_API_KEY")
+    API_KEY = os.getenv("GEMINI_API_KEY")
     if not API_KEY:
-        console.print("[bold red]Error:[/bold red] OPENROUTER_API_KEY not found in environment variables. Please create a .env file.")
+        console.print("[bold red]Error:[/bold red] GEMINI_API_KEY not found in environment variables. Please create a .env file.")
         return
 
     # --- Initialization ---
@@ -139,6 +144,10 @@ def main():
         for availability in nat.get("resources_available", []):
             entries.append((availability, "availability", nat["id"]))
 
+    if not entries:
+        console.print("[yellow]No entries extracted from notes. Cannot build index.[/yellow]")
+        return
+    
     console.print("\nEmbedding notes and building index...", style="bold green")
     texts = [e[0] for e in entries]
     embeddings = np.array(embedder.get_embeddings(texts)).astype("float32")
