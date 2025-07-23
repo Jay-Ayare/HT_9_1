@@ -36,3 +36,11 @@ class FAISSHandler:
             import traceback
             traceback.print_exc()
             return []
+
+    def save_index(self, filepath: str):
+        """Save the FAISS index to a file."""
+        faiss.write_index(self.index, filepath)
+
+    def load_index(self, filepath: str):
+        """Load a FAISS index from a file."""
+        self.index = faiss.read_index(filepath)

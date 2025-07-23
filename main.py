@@ -122,7 +122,18 @@ def main():
         console.print(f"Processing Note {i + 1}...", style="cyan")
         nat_raw = nat_filler.fill_nat(note_text)
         try:
-            cleaned = re.sub(r"(^```json\s*|```$)", "", nat_raw.strip(), flags=re.MULTILINE)
+            # Try to extract JSON from markdown code blocks first
+            json_match = re.search(r'```json\s*\n(.*?)\n```', nat_raw, re.DOTALL)
+            if json_match:
+                cleaned = json_match.group(1).strip()
+            else:
+                # Fallback: try to find JSON in the response
+                json_match = re.search(r'\{.*\}', nat_raw, re.DOTALL)
+                if json_match:
+                    cleaned = json_match.group(0).strip()
+                else:
+                    # Last fallback: clean the old way
+                    cleaned = re.sub(r"(^```json\s*|```$)", "", nat_raw.strip(), flags=re.MULTILINE)
             nat = json.loads(cleaned)
             nat.setdefault("resources_needed", [])
             nat.setdefault("resources_available", [])
@@ -138,6 +149,10 @@ def main():
             entries.append((need, "need", nat["id"]))
         for availability in nat.get("resources_available", []):
             entries.append((availability, "availability", nat["id"]))
+
+    if not entries:
+        console.print("[yellow]No entries found after processing. Nothing to embed or index.[/yellow]")
+        return
 
     console.print("\nEmbedding notes and building index...", style="bold green")
     texts = [e[0] for e in entries]
