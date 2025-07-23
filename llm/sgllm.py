@@ -16,7 +16,8 @@ class SuggestionGenerator:
             "- *Italic* for emphasis\n"
             "- Well-structured sections (Why it works, Action steps, etc.)\n"
             "- Easy-to-read formatting with proper spacing\n\n"
-            "Make it engaging, actionable, and well-formatted for reading."
+            "Make it engaging, actionable, and well-formatted for reading.\n"
+
         )
         payload = {
             "contents": [
