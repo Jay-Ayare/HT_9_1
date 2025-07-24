@@ -15,6 +15,8 @@ from embeddings.embedder import Embedder
 from vector_store.faiss_handler import FAISSHandler
 from llm.sgllm import SuggestionGenerator
 from nat.nat_filler import NATFiller
+from graph_db.subgraph_generator import SubgraphGenerator
+from graph_db.neo4j_handler import get_neo4j_handler
 
 # Load environment variables
 load_dotenv()
@@ -37,6 +39,8 @@ nat_filler = NATFiller(api_key=API_KEY)
 embedder = Embedder()
 indexer = FAISSHandler()
 sgllm = SuggestionGenerator(api_key=API_KEY)
+subgraph_generator = SubgraphGenerator(api_key=API_KEY)
+neo4j_handler = get_neo4j_handler()
 
 def process_note_with_nat(note_text: str, note_id: int) -> Dict:
     """Process a single note through NAT extraction."""
@@ -57,6 +61,34 @@ def process_note_with_nat(note_text: str, note_id: int) -> Dict:
         nat.setdefault("resources_available", [])
         nat["original_note"] = note_text
         nat["id"] = note_id
+        
+        # Generate subgraph for this note (skip if Neo4j not available)
+        neo4j_enabled = os.getenv("ENABLE_NEO4J", "true").lower() == "true"
+        
+        if neo4j_enabled:
+            print(f"Generating subgraph for note {note_id}...")
+            try:
+                # Test Neo4j connection first
+                if not neo4j_handler.health_check():
+                    print("Neo4j not available, skipping subgraph generation")
+                    nat["subgraph_stored"] = False
+                else:
+                    subgraph_data = subgraph_generator.generate_subgraph(note_text)
+                    
+                    # Store in Neo4j
+                    success = neo4j_handler.create_note_subgraph(str(note_id), subgraph_data)
+                    if success:
+                        print(f"Subgraph stored successfully for note {note_id}")
+                        nat["subgraph_stored"] = True
+                    else:
+                        print(f"Failed to store subgraph for note {note_id}")
+                        nat["subgraph_stored"] = False
+            except Exception as e:
+                print(f"Error generating/storing subgraph for note {note_id}: {e}")
+                nat["subgraph_stored"] = False
+        else:
+            print("Neo4j disabled, skipping subgraph generation")
+            nat["subgraph_stored"] = False
         
         return nat
     except (json.JSONDecodeError, TypeError) as e:

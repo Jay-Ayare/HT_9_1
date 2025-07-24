@@ -4,3 +4,9 @@ faiss-cpu
 transformers
 openai
 requests
+neo4j
+flask
+flask-cors
+python-dotenv
+scikit-learn
+numpy
