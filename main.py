@@ -14,6 +14,7 @@ from nat.nat_filler import NATFiller
 from rich.console import Console
 from rich.panel import Panel
 from typing import List, Dict, Tuple
+from graph_db.llama_graph import add_note_to_graph
 
 
 # --- Constants ---
@@ -129,6 +130,8 @@ def main():
             nat["original_note"] = note_text
             nat["id"] = i
             nats.append(nat)
+            # Add to knowledge graph using LlamaIndex
+            add_note_to_graph(note_text)
         except (json.JSONDecodeError, TypeError):
             console.print(f"[bold red]Error:[/bold red] Could not parse JSON for Note {i+1}. Skipping.")
 
