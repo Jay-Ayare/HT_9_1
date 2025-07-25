@@ -25,7 +25,7 @@ app = Flask(__name__)
 CORS(app)  # Enable CORS for frontend
 
 # --- Constants ---
-SIMILARITY_THRESHOLD = 0.3
+SIMILARITY_THRESHOLD = 0.001
 FAISS_INDEX_PATH = "vector_store/ht.index"
 ENTRIES_FILE_PATH = "vector_store/entries.json"
 EMBEDDINGS_FILE_PATH = "vector_store/embeddings.npy"
