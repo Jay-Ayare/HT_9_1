@@ -10,3 +10,15 @@ flask-cors
 python-dotenv
 scikit-learn
 numpy
+
+# GraphRAG Integration Dependencies
+langchain
+langchain-openai
+langchain-community
+networkx
+matplotlib
+nltk
+spacy
+tqdm
+pydantic
+sentence-transformers

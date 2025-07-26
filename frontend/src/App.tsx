@@ -3,6 +3,7 @@ import { motion, AnimatePresence } from 'framer-motion';
 import { NoteInput } from './components/NoteInput';
 import { NoteList } from './components/NoteList';
 import { NoteDetail } from './components/NoteDetail';
+import GraphRAGQuery from './components/GraphRAGQuery';
 import { Note, Suggestion, ApiError } from './types';
 import { apiService } from './utils/api';
 import { mockNotes } from './utils/mockData';
@@ -35,6 +36,7 @@ function App() {
   const [error, setError] = useState<string | null>(null);
   const [selectedFilter, setSelectedFilter] = useState('all');
   const [showInput, setShowInput] = useState(!mockNotes.length);
+  const [activeTab, setActiveTab] = useState<'notes' | 'graphrag'>('notes');
 
   // Load suggestions on mount
   // This is removed as there is no backend endpoint to get all suggestions initially.
@@ -251,72 +253,115 @@ function App() {
             initial={{ opacity: 0, y: 20 }}
             animate={{ opacity: 1, y: 0 }}
             transition={{ duration: 0.5 }}
-            className="grid grid-cols-1 lg:grid-cols-3 gap-8 h-[calc(100vh-240px)]"
+            className="space-y-6"
           >
-            {/* Left Panel - Notes List */}
-            <motion.div 
-              initial={{ x: -50, opacity: 0 }}
-              animate={{ x: 0, opacity: 1 }}
-              transition={{ delay: 0.2, duration: 0.5 }}
-              className="lg:col-span-1 space-y-4"
-            >
-              <div className="flex items-center justify-between">
-                <h2 className="text-xl font-semibold text-[#e0e0ff]">Your Notes</h2>
-                <motion.span 
-                  key={notes.length}
-                  initial={{ scale: 1.2 }}
-                  animate={{ scale: 1 }}
-                  className="text-sm text-[#e0e0ff]/50"
-                >
-                  {notes.filter(n => selectedFilter === 'all' || 
-                    [...(n.sentiments || []), ...(n.resources_needed || []), ...(n.resources_available || [])]
-                      .some(cat => cat.toLowerCase().includes(selectedFilter.toLowerCase()))
-                  ).length} notes
-                </motion.span>
-              </div>
-              <motion.div 
-                whileHover={{ boxShadow: '0 10px 25px -5px rgba(127, 90, 240, 0.1)' }}
-                className="bg-[#1a1a2e] rounded-lg border border-[#444466] p-4 h-full overflow-y-auto backdrop-blur-sm"
+            {/* Tab Navigation */}
+            <div className="flex space-x-1 bg-[#1a1a2e] rounded-lg p-1 border border-[#444466]">
+              <button
+                onClick={() => setActiveTab('notes')}
+                className={`flex-1 py-2 px-4 rounded-md text-sm font-medium transition-colors ${
+                  activeTab === 'notes'
+                    ? 'bg-[#7f5af0] text-white'
+                    : 'text-[#e0e0ff]/70 hover:text-[#e0e0ff]'
+                }`}
               >
-                <NoteList
-                  notes={notes}
-                  selectedNoteId={selectedNoteId}
-                  onSelectNote={setSelectedNoteId}
-                  selectedFilter={selectedFilter}
-                  isLoading={isLoadingSuggestions}
-                />
-              </motion.div>
-            </motion.div>
+                Notes & Suggestions
+              </button>
+              <button
+                onClick={() => setActiveTab('graphrag')}
+                className={`flex-1 py-2 px-4 rounded-md text-sm font-medium transition-colors ${
+                  activeTab === 'graphrag'
+                    ? 'bg-[#7f5af0] text-white'
+                    : 'text-[#e0e0ff]/70 hover:text-[#e0e0ff]'
+                }`}
+              >
+                GraphRAG Query
+              </button>
+            </div>
 
-            {/* Right Panel - Note Details */}
-            <motion.div 
-              initial={{ x: 50, opacity: 0 }}
-              animate={{ x: 0, opacity: 1 }}
-              transition={{ delay: 0.4, duration: 0.5 }}
-              className="lg:col-span-2"
-            >
-              {selectedNote ? (
-                <div className="h-full overflow-y-auto">
-                  <NoteDetail
-                    note={selectedNote}
-                    suggestions={suggestions}
-                    onReprocess={handleReprocessNote}
-                    isReprocessing={isReprocessing}
-                  />
-                </div>
-              ) : (
+            {/* Tab Content */}
+            {activeTab === 'notes' ? (
+              <motion.div 
+                initial={{ opacity: 0, y: 20 }}
+                animate={{ opacity: 1, y: 0 }}
+                transition={{ duration: 0.5 }}
+                className="grid grid-cols-1 lg:grid-cols-3 gap-8 h-[calc(100vh-300px)]"
+              >
+                {/* Left Panel - Notes List */}
                 <motion.div 
-                  initial={{ scale: 0.9, opacity: 0 }}
-                  animate={{ scale: 1, opacity: 1 }}
-                  className="bg-[#1a1a2e] rounded-lg border border-[#444466] h-full flex items-center justify-center backdrop-blur-sm"
+                  initial={{ x: -50, opacity: 0 }}
+                  animate={{ x: 0, opacity: 1 }}
+                  transition={{ delay: 0.2, duration: 0.5 }}
+                  className="lg:col-span-1 space-y-4"
                 >
-                  <div className="text-center text-[#e0e0ff]/50">
-                    <h3 className="text-lg font-medium mb-2">Select a note</h3>
-                    <p>Choose a note from the list to view details and suggestions</p>
+                  <div className="flex items-center justify-between">
+                    <h2 className="text-xl font-semibold text-[#e0e0ff]">Your Notes</h2>
+                    <motion.span 
+                      key={notes.length}
+                      initial={{ scale: 1.2 }}
+                      animate={{ scale: 1 }}
+                      className="text-sm text-[#e0e0ff]/50"
+                    >
+                      {notes.filter(n => selectedFilter === 'all' || 
+                        [...(n.sentiments || []), ...(n.resources_needed || []), ...(n.resources_available || [])]
+                          .some(cat => cat.toLowerCase().includes(selectedFilter.toLowerCase()))
+                      ).length} notes
+                    </motion.span>
                   </div>
+                  <motion.div 
+                    whileHover={{ boxShadow: '0 10px 25px -5px rgba(127, 90, 240, 0.1)' }}
+                    className="bg-[#1a1a2e] rounded-lg border border-[#444466] p-4 h-full overflow-y-auto backdrop-blur-sm"
+                  >
+                    <NoteList
+                      notes={notes}
+                      selectedNoteId={selectedNoteId}
+                      onSelectNote={setSelectedNoteId}
+                      selectedFilter={selectedFilter}
+                      isLoading={isLoadingSuggestions}
+                    />
+                  </motion.div>
                 </motion.div>
-              )}
-            </motion.div>
+
+                {/* Right Panel - Note Details */}
+                <motion.div 
+                  initial={{ x: 50, opacity: 0 }}
+                  animate={{ x: 0, opacity: 1 }}
+                  transition={{ delay: 0.4, duration: 0.5 }}
+                  className="lg:col-span-2"
+                >
+                  {selectedNote ? (
+                    <div className="h-full overflow-y-auto">
+                      <NoteDetail
+                        note={selectedNote}
+                        suggestions={suggestions}
+                        onReprocess={handleReprocessNote}
+                        isReprocessing={isReprocessing}
+                      />
+                    </div>
+                  ) : (
+                    <motion.div 
+                      initial={{ scale: 0.9, opacity: 0 }}
+                      animate={{ scale: 1, opacity: 1 }}
+                      className="bg-[#1a1a2e] rounded-lg border border-[#444466] h-full flex items-center justify-center backdrop-blur-sm"
+                    >
+                      <div className="text-center text-[#e0e0ff]/50">
+                        <h3 className="text-lg font-medium mb-2">Select a note</h3>
+                        <p>Choose a note from the list to view details and suggestions</p>
+                      </div>
+                    </motion.div>
+                  )}
+                </motion.div>
+              </motion.div>
+            ) : (
+              <motion.div 
+                initial={{ opacity: 0, y: 20 }}
+                animate={{ opacity: 1, y: 0 }}
+                transition={{ duration: 0.5 }}
+                className="h-[calc(100vh-300px)]"
+              >
+                <GraphRAGQuery notes={notes.map(n => n.content)} />
+              </motion.div>
+            )}
           </motion.div>
         )}
       </motion.div>

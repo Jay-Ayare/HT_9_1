@@ -18,6 +18,14 @@ from nat.nat_filler import NATFiller
 from graph_db.subgraph_generator import SubgraphGenerator
 from graph_db.neo4j_handler import get_neo4j_handler
 
+# Import GraphRAG integration
+try:
+    from graph_rag_integration import GraphRAGIntegration, GraphRAGConfig, integrate_with_existing_notes
+    GRAPHRAG_AVAILABLE = True
+except ImportError as e:
+    print(f"Warning: GraphRAG integration not available: {e}")
+    GRAPHRAG_AVAILABLE = False
+
 # Load environment variables
 load_dotenv()
 
@@ -41,6 +49,27 @@ indexer = FAISSHandler()
 sgllm = SuggestionGenerator(api_key=API_KEY)
 subgraph_generator = SubgraphGenerator(api_key=API_KEY)
 neo4j_handler = get_neo4j_handler()
+
+# Initialize components
+embedder = Embedder()
+indexer = FAISSHandler()
+sgllm = SuggestionGenerator(api_key=os.getenv("GEMINI_API_KEY"))
+nat_filler = NATFiller(api_key=os.getenv("GEMINI_API_KEY"))
+
+# Initialize GraphRAG if available
+graph_rag = None
+if GRAPHRAG_AVAILABLE:
+    try:
+        config = GraphRAGConfig(
+            chunk_size=300,
+            chunk_overlap=50,
+            similarity_threshold=0.2,
+            enable_visualization=True
+        )
+        graph_rag = GraphRAGIntegration(config)
+        print("GraphRAG integration initialized successfully")
+    except Exception as e:
+        print(f"Warning: Could not initialize GraphRAG: {e}")
 
 def process_note_with_nat(note_text: str, note_id: int) -> Dict:
     """Process a single note through NAT extraction."""
@@ -265,7 +294,186 @@ def health_check():
     """Health check endpoint."""
     return jsonify({"status": "healthy", "timestamp": datetime.now().isoformat()})
 
+@app.route('/api/notes', methods=['GET'])
+def get_notes():
+    """Get all notes."""
+    try:
+        with open('notes/user_notes.json', 'r') as f:
+            data = json.load(f)
+        return jsonify(data)
+    except FileNotFoundError:
+        return jsonify({"notes": []})
+
+@app.route('/api/notes', methods=['POST'])
+def add_note():
+    """Add a new note."""
+    try:
+        data = request.get_json()
+        note_text = data.get('text', '').strip()
+        
+        if not note_text:
+            return jsonify({"error": "Note text is required"}), 400
+        
+        # Load existing notes
+        try:
+            with open('notes/user_notes.json', 'r') as f:
+                data = json.load(f)
+        except FileNotFoundError:
+            data = {"notes": []}
+        
+        # Add new note
+        data["notes"].append(note_text)
+        
+        # Save updated notes
+        with open('notes/user_notes.json', 'w') as f:
+            json.dump(data, f, indent=2)
+        
+        # Update GraphRAG if available
+        if graph_rag:
+            try:
+                graph_rag.process_documents(data["notes"])
+                print("GraphRAG updated with new note")
+            except Exception as e:
+                print(f"Warning: Could not update GraphRAG: {e}")
+        
+        return jsonify({"message": "Note added successfully", "note": note_text})
+    
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
+
+@app.route('/api/suggestions', methods=['POST'])
+def generate_suggestions():
+    """Generate suggestions based on needs and availability."""
+    try:
+        data = request.get_json()
+        need = data.get('need', '').strip()
+        availability = data.get('availability', '').strip()
+        
+        if not need or not availability:
+            return jsonify({"error": "Both need and availability are required"}), 400
+        
+        # Generate basic suggestion
+        suggestion = sgllm.generate(need, availability)
+        
+        # Enhance with GraphRAG if available
+        enhanced_suggestion = suggestion
+        if graph_rag:
+            try:
+                from graph_rag_integration import enhance_existing_suggestions
+                enhanced_suggestion = enhance_existing_suggestions(graph_rag, need, availability)
+            except Exception as e:
+                print(f"Warning: Could not enhance suggestion with GraphRAG: {e}")
+        
+        return jsonify({
+            "suggestion": enhanced_suggestion,
+            "need": need,
+            "availability": availability
+        })
+    
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
+
+@app.route('/api/graphrag/query', methods=['POST'])
+def graphrag_query():
+    """Query the GraphRAG system."""
+    if not GRAPHRAG_AVAILABLE or not graph_rag:
+        return jsonify({"error": "GraphRAG is not available"}), 503
+    
+    try:
+        data = request.get_json()
+        query = data.get('query', '').strip()
+        
+        if not query:
+            return jsonify({"error": "Query is required"}), 400
+        
+        # Check if documents have been processed
+        if not graph_rag.query_engine:
+            return jsonify({"error": "No documents processed. Please add some notes first."}), 400
+        
+        # Perform query
+        response, traversal_path, relevant_content = graph_rag.query(query)
+        
+        return jsonify({
+            "response": response,
+            "traversal_path": traversal_path,
+            "relevant_content": relevant_content,
+            "query": query
+        })
+    
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
+
+@app.route('/api/graphrag/info', methods=['GET'])
+def graphrag_info():
+    """Get information about the GraphRAG system."""
+    if not GRAPHRAG_AVAILABLE:
+        return jsonify({"error": "GraphRAG is not available"}), 503
+    
+    try:
+        info = graph_rag.get_graph_info() if graph_rag else {"nodes": 0, "edges": 0}
+        return jsonify({
+            "available": True,
+            "initialized": graph_rag is not None,
+            "graph_info": info
+        })
+    
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
+
+@app.route('/api/graphrag/process', methods=['POST'])
+def graphrag_process():
+    """Process documents for GraphRAG."""
+    if not GRAPHRAG_AVAILABLE:
+        return jsonify({"error": "GraphRAG is not available"}), 503
+    
+    try:
+        data = request.get_json() or {}
+        notes = data.get("notes")
+        if notes is None:
+            # Fallback to file
+            try:
+                with open('notes/user_notes.json', 'r') as f:
+                    file_data = json.load(f)
+                    notes = file_data.get("notes", [])
+            except FileNotFoundError:
+                notes = []
+        
+        if not notes:
+            return jsonify({"error": "No notes found to process"}), 400
+        
+        graph_rag.process_documents(notes)
+        info = graph_rag.get_graph_info()
+        return jsonify({
+            "message": "Documents processed successfully",
+            "graph_info": info,
+            "notes_processed": len(notes)
+        })
+    
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
+
+@app.route('/api/nat/fill', methods=['POST'])
+def nat_fill():
+    """Fill NAT (Needs, Availability, Tasks) from text."""
+    try:
+        data = request.get_json()
+        text = data.get('text', '').strip()
+        
+        if not text:
+            return jsonify({"error": "Text is required"}), 400
+        
+        # Extract NAT components
+        nat_components = nat_filler.extract_nat(text)
+        
+        return jsonify({
+            "nat_components": nat_components,
+            "original_text": text
+        })
+    
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
+
 if __name__ == '__main__':
     print("Starting HiddenThread API server...")
     print(f"Environment variables loaded: API_KEY={'✓' if API_KEY else '✗'}")
-    app.run(debug=True, port=3001)
+    app.run(debug=True, port=3001, host='0.0.0.0')

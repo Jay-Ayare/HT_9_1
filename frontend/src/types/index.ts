@@ -18,6 +18,7 @@ export interface Suggestion {
 
 export interface ProcessedNote {
   id: string;
+  content: string;
   sentiments: string[];
   resources_needed: string[];
   resources_available: string[];

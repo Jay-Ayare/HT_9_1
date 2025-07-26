@@ -129,6 +129,61 @@ class ApiService {
     }
   }
 
+  async getGraphRAGInfo(): Promise<any> {
+    try {
+      const response = await fetch(`${API_BASE}/api/graphrag/info`);
+      
+      if (!response.ok) {
+        throw new Error(`HTTP ${response.status}: ${response.statusText}`);
+      }
+
+      return await response.json();
+    } catch (error) {
+      console.error('Error fetching GraphRAG info:', error);
+      throw this.handleError(error);
+    }
+  }
+
+  async queryGraphRAG(query: string): Promise<any> {
+    try {
+      const response = await fetch(`${API_BASE}/api/graphrag/query`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({ query }),
+      });
+
+      if (!response.ok) {
+        throw new Error(`HTTP ${response.status}: ${response.statusText}`);
+      }
+
+      return await response.json();
+    } catch (error) {
+      console.error('Error querying GraphRAG:', error);
+      throw this.handleError(error);
+    }
+  }
+
+  async processGraphRAGDocuments(notes: string[]): Promise<any> {
+    try {
+      const response = await fetch(`${API_BASE}/api/graphrag/process`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ notes }),
+      });
+
+      if (!response.ok) {
+        throw new Error(`HTTP ${response.status}: ${response.statusText}`);
+      }
+
+      return await response.json();
+    } catch (error) {
+      console.error('Error processing GraphRAG documents:', error);
+      throw this.handleError(error);
+    }
+  }
+
   private handleError(error: any): ApiError {
     if (error.name === 'TypeError' && error.message.includes('fetch')) {
       return {
